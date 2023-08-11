@@ -1,3 +1,4 @@
 __pycache__
 venvfastapi/
+auth/__pycache__
 .env
