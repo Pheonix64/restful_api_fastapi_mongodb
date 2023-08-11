@@ -7,8 +7,8 @@ from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-JWT_SECRET = "6cdc532b7ec8a5a8ebfc37a6e1fae81fedccb83471a9f7efc2a6a1910fb4eea3"# config("secret")
-JWT_ALGORITHM = "HS256" #config("JWT_ALGORITHM")
+JWT_SECRET = config("secret")
+JWT_ALGORITHM = config("JWT_ALGORITHM")
 
 def hash_password(password: str):
     return pwd_context.hash(password)
