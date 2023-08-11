@@ -1,4 +1,5 @@
 fastapi
+pyjwt
 pydantic[email]
 uvicorn[standard]
 pydantic[all]
