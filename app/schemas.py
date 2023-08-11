@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from bson.objectid import ObjectId
 
 class BookModel(BaseModel):
@@ -72,6 +72,32 @@ class BookSchema(BaseModel):
                 "rating": 4.0,
                 "title": "Experiments, Science, and Fashion in Nanophotonics",
                 "voters": 200
+            }
+        }
+
+class UserSchema(BaseModel):
+    fullname: str = Field(...)
+    email: EmailStr = Field(...)
+    password: str = Field(...)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "fullname": "Joe Doe",
+                "email": "joe@xyz.com",
+                "password": "any"
+            }
+        }
+
+class UserLoginSchema(BaseModel):
+    email: EmailStr = Field(...)
+    password: str = Field(...)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "joe@xyz.com",
+                "password": "any"
             }
         }
 

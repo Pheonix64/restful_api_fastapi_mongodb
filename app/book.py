@@ -1,14 +1,29 @@
 from typing import List
-from fastapi import HTTPException, status, APIRouter
+from fastapi import HTTPException, status, APIRouter,Depends
 from fastapi.responses import JSONResponse
 from pymongo.collection import ReturnDocument
 from app import schemas
+from app.auth.auth_bearer import JWTBearer
 from app.database import connect_db
 from app.book_serializers import book_entity, book_list_entity
 
 router = APIRouter()
 
-Book = connect_db()
+collection = None
+client = None
+
+@router.on_event("startup")
+async def startup():
+    global collection
+    global client
+    client = connect_db()
+    db = client["bookshop"]
+    collection = db["books"]
+
+
+@router.on_event("shutdown")
+async def shutdown():
+    client.close()
 
 #Get all Records
 @router.get('/', status_code=status.HTTP_200_OK, response_description="List all books")
@@ -26,7 +41,7 @@ async def get_books():
         If the database contains books, the response will be a JSON list with book details.
         Otherwise, an HTTP 404 response will be returned with the message "Database is empty."
     """
-    books = await Book.find().to_list(length=None)
+    books = await collection.find().to_list(length=None)
     if not books:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Database is empty")
@@ -41,7 +56,7 @@ async def get_book(isbn: str):
     Get a book record from the database based on its ISBN.
 
     Args:
-        isbn (str): The ISBN (International Standard Book Number) of the book.
+        isbn (str): The ISBN (International Standard collection Number) of the book.
 
     Returns:
         dict: A dictionary representing the book record in the database.
@@ -54,7 +69,7 @@ async def get_book(isbn: str):
         the book details. Otherwise, an HTTP 404 response will be returned with the message "No book
         with this ISBN: {isbn} found."
     """
-    book = await Book.find_one({'ISBN': isbn})
+    book = await collection.find_one({'ISBN': isbn})
     if not book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"No book with this ISBN: {isbn} found")
@@ -82,7 +97,7 @@ async def get_book_title(title: str):
         the book details. Otherwise, an HTTP 404 response will be returned with the message "No book
         with this title: {title} found."
     """    
-    book = await Book.find_one({'title': title})
+    book = await collection.find_one({'title': title})
     if not book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"No book with this title: {title} found")
@@ -110,7 +125,7 @@ async def get_book_author(author: str):
         the book details. Otherwise, an HTTP 404 response will be returned with the message "No book
         with this author: {author} found."
     """
-    books = await Book.find({'author': author}).to_list(length=None)
+    books = await collection.find({'author': author}).to_list(length=None)
     if not books:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"No book with this author: {author} found")
@@ -140,7 +155,7 @@ async def get_book_year(year: int):
         with this year: {year} found."
     """    
     year = str(year)
-    books = await Book.find({"published_date": {"$regex": year, "$options": "i"}}).to_list(length=None)
+    books = await collection.find({"published_date": {"$regex": year, "$options": "i"}}).to_list(length=None)
     if not books:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"No book with this year: {year} found")
@@ -169,7 +184,7 @@ async def get_book_publisher(publisher: str):
         the book details. Otherwise, an HTTP 404 response will be returned with the message "No book
         with this publisher: {publisher} found."
     """
-    books = await Book.find({'publisher': publisher}).to_list(length=None)
+    books = await collection.find({'publisher': publisher}).to_list(length=None)
     if not books:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"No book with this publisher: {publisher} found")
@@ -193,7 +208,7 @@ async def get_books_famous():
         If famous books (rating >= 5) exist in the database, the response will be a JSON list containing
         the book details. Otherwise, an HTTP 404 response will be returned with the message "No book found."
     """
-    books = await Book.find({"rating": {"$gte": 5}}).to_list(length=None)
+    books = await collection.find({"rating": {"$gte": 5}}).to_list(length=None)
     if not books:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="No book found")
@@ -202,6 +217,7 @@ async def get_books_famous():
 
 # Create a Record
 @router.post('/', response_description="Add new book",
+             dependencies=[Depends(JWTBearer())],
              response_model=schemas.BookSchema)
 async def create_book(payload: schemas.BookSchema):
     """
@@ -219,24 +235,25 @@ async def create_book(payload: schemas.BookSchema):
     Example:
         If the book is successfully created, the response will be a JSON object with the newly added book details.
         If a book with the same title already exists in the database, an HTTP 409 response will be returned with
-        the message "Book with title: {payload.title} already exists."
+        the message "collection with title: {payload.title} already exists."
     """
     try:
-        result = await Book.insert_one(payload.model_dump(exclude_none=True))
-        new_book = await Book.find_one({'_id': result.inserted_id})
+        result = await collection.insert_one(payload.model_dump(exclude_none=True))
+        new_book = await collection.find_one({'_id': result.inserted_id})
         return JSONResponse(status_code=status.HTTP_201_CREATED, content=book_entity(new_book))
     
     except ValueError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                            detail=f"Book with title: {payload.title} already exists")
+                            detail=f"collection with title: {payload.title} already exists")
 
 
 #Update a Record
 @router.put('/{isbn}', status_code=status.HTTP_200_OK, response_description="Update one book",
+            dependencies=[Depends(JWTBearer())],
             response_model=schemas.BookSchema)
 async def update_book(isbn: str, payload: schemas.BookSchema):   
     """
-    Update an existing book record in the database based on its ISBN (International Standard Book Number).
+    Update an existing book record in the database based on its ISBN (International Standard collection Number).
 
     Args:
         isbn (str): The ISBN of the book to be updated.
@@ -254,7 +271,7 @@ async def update_book(isbn: str, payload: schemas.BookSchema):
         If no book with the specified ISBN is found, an HTTP 404 response will be returned with the message
         "No book with this ISBN: {isbn} found."
     """    
-    updated_book = await Book.find_one_and_update(
+    updated_book = await collection.find_one_and_update(
         {'ISBN': isbn}, {'$set': payload.model_dump(exclude_none=True)},
         return_document=ReturnDocument.AFTER)
     
@@ -264,10 +281,11 @@ async def update_book(isbn: str, payload: schemas.BookSchema):
     return book_entity(updated_book)
 
 
-@router.delete('/{isbn}', status_code=status.HTTP_200_OK, response_description="Delete one book")
+@router.delete('/{isbn}', status_code=status.HTTP_200_OK, response_description="Delete one book",
+               dependencies=[Depends(JWTBearer())])
 async def delete_book(isbn: str):    
     """
-    Delete an existing book record from the database based on its ISBN (International Standard Book Number).
+    Delete an existing book record from the database based on its ISBN (International Standard collection Number).
 
     Args:
         isbn (str): The ISBN of the book to be deleted.
@@ -284,7 +302,7 @@ async def delete_book(isbn: str):
         If no book with the specified ISBN is found, an HTTP 404 response will be returned with the message
         "No book with this ISBN: {isbn} found."
     """
-    book = await Book.find_one_and_delete({'ISBN': isbn})
+    book = await collection.find_one_and_delete({'ISBN': isbn})
     
     if not book:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
