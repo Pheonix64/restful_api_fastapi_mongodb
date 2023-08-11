@@ -1,7 +1,7 @@
 fastapi
+pydantic[email]
 uvicorn[standard]
 pydantic[all]
-pydantic[email]
 passlib[bcrypt]
 python-decouple
 motor
